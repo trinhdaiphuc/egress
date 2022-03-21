@@ -1,11 +1,9 @@
 package source
 
 import (
-	"strings"
 	"sync"
 
 	"github.com/go-logr/logr"
-	"github.com/pion/rtp/codecs"
 	"github.com/pion/webrtc/v3"
 	"github.com/pion/webrtc/v3/pkg/media"
 	"go.uber.org/atomic"
@@ -27,10 +25,10 @@ const (
 type SDKSource struct {
 	mu sync.Mutex
 
-	room     *lksdk.Room
-	trackIDs []string
-	active   atomic.Int32
-	writers  map[string]*trackWriter
+	room      *lksdk.Room
+	trackIDs  []string
+	active    atomic.Int32
+	recorders map[string]*trackRecorder
 
 	endRecording chan struct{}
 
@@ -42,6 +40,7 @@ func NewSDKSource(p *params.Params, createWriter func(*webrtc.TrackRemote) (medi
 		room:         lksdk.CreateRoom(p.LKUrl),
 		endRecording: make(chan struct{}),
 		logger:       p.Logger,
+		recorders:    make(map[string]*trackRecorder),
 	}
 
 	switch p.Info.Request.(type) {
@@ -52,37 +51,21 @@ func NewSDKSource(p *params.Params, createWriter func(*webrtc.TrackRemote) (medi
 	}
 
 	s.room.Callback.OnTrackSubscribed = func(track *webrtc.TrackRemote, _ *lksdk.RemoteTrackPublication, rp *lksdk.RemoteParticipant) {
-		var sb *samplebuilder.SampleBuilder
-		switch {
-		case strings.EqualFold(track.Codec().MimeType, "video/vp8"):
-			sb = samplebuilder.New(maxVideoLate, &codecs.VP8Packet{}, track.Codec().ClockRate,
-				samplebuilder.WithPacketDroppedHandler(func() { rp.WritePLI(track.SSRC()) }))
-		case strings.EqualFold(track.Codec().MimeType, "video/h264"):
-			sb = samplebuilder.New(maxVideoLate, &codecs.H264Packet{}, track.Codec().ClockRate,
-				samplebuilder.WithPacketDroppedHandler(func() { rp.WritePLI(track.SSRC()) }))
-		case strings.EqualFold(track.Codec().MimeType, "audio/opus"):
-			sb = samplebuilder.New(maxAudioLate, &codecs.OpusPacket{}, track.Codec().ClockRate)
-		default:
-			s.logger.Errorw("could not record track", errors.ErrNotSupported(track.Codec().MimeType))
-			return
-		}
+		sb := createSampleBuilder(track.Codec(), samplebuilder.WithPacketDroppedHandler(func() {
+			rp.WritePLI(track.SSRC())
+		}))
 
 		mw, err := createWriter(track)
 		if err != nil {
 			s.logger.Errorw("could not record track", err)
+			return
 		}
 
-		tw := &trackWriter{
-			sb:     sb,
-			writer: mw,
-			track:  track,
-			closed: make(chan struct{}),
-			logger: logger.Logger(logr.Logger(p.Logger).WithValues("trackID", track.ID())),
-		}
-		go tw.start()
+		tr := createTrackRecorder(sb, mw, logger.Logger(logr.Logger(p.Logger).WithValues("trackID", track.ID())))
+		go tr.Start(track)
 
 		s.mu.Lock()
-		s.writers[track.ID()] = tw
+		s.recorders[track.ID()] = tr
 		s.mu.Unlock()
 	}
 	s.room.Callback.OnTrackUnpublished = s.onTrackUnpublished
@@ -165,54 +148,8 @@ func (s *SDKSource) EndRecording() chan struct{} {
 func (s *SDKSource) Close() {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	for _, writer := range s.writers {
-		writer.stop()
+	for _, r := range s.recorders {
+		r.Stop()
 	}
 	s.room.Disconnect()
-}
-
-type trackWriter struct {
-	sb     *samplebuilder.SampleBuilder
-	writer media.Writer
-	track  *webrtc.TrackRemote
-	closed chan struct{}
-	logger logger.Logger
-}
-
-func (t *trackWriter) start() {
-	defer func() {
-		err := t.writer.Close()
-		if err != nil {
-			t.logger.Errorw("could not close track writer", err)
-		}
-	}()
-	for {
-		select {
-		case <-t.closed:
-			return
-		default:
-			pkt, _, err := t.track.ReadRTP()
-			if err != nil {
-				t.logger.Errorw("could not read from track", err)
-				return
-			}
-			t.sb.Push(pkt)
-
-			for _, p := range t.sb.PopPackets() {
-				if err = t.writer.WriteRTP(p); err != nil {
-					t.logger.Errorw("could not write to file", err)
-					return
-				}
-			}
-		}
-	}
-}
-
-func (t *trackWriter) stop() {
-	select {
-	case <-t.closed:
-		return
-	default:
-		close(t.closed)
-	}
 }
