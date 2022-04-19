@@ -36,6 +36,7 @@ type SDKSource struct {
 	// track
 	trackID    string
 	fileWriter *fileWriter
+	wsWriter   *wsWriter
 
 	// track composite
 	cs *clockSync
@@ -114,6 +115,7 @@ func NewSDKSource(p *params.Params) (*SDKSource, error) {
 			}
 		} else {
 			s.fileWriter, err = newFileWriter(track, rp, s.logger)
+			s.wsWriter, err = newWsWriter(track, rp.WritePLI, "", s.logger)
 		}
 
 		if err != nil {
