@@ -2,6 +2,11 @@ module github.com/livekit/livekit-egress
 
 go 1.17
 
+replace (
+	github.com/livekit/protocol => ./deps/protocol
+	github.com/livekit/server-sdk-go => ./deps/server-sdk-go
+)
+
 require (
 	cloud.google.com/go/storage v1.10.0
 	github.com/Azure/azure-storage-blob-go v0.14.0

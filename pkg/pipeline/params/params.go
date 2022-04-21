@@ -31,6 +31,8 @@ type Params struct {
 	FileInfo   *livekit.FileInfo
 	StreamInfo map[string]*livekit.StreamInfo
 
+	EgressWebSocketURL string
+
 	// logger
 	Logger logger.Logger
 }
@@ -150,14 +152,14 @@ func GetPipelineParams(conf *config.Config, request *livekit.StartEgressRequest)
 		params.RoomName = req.Track.RoomName
 		params.TrackID = req.Track.TrackId
 
-		// switch o := req.Track.Output.(type) {
-		// case *livekit.TrackEgressRequest_HttpUrl:
-		// case *livekit.TrackEgressRequest_WebsocketUrl:
-		// default:
-		// 	return nil, errors.ErrInvalidInput
-		// }
+		switch o := req.Track.Output.(type) {
+		case *livekit.TrackEgressRequest_WebsocketUrl:
+			params.EgressWebSocketURL = o.WebsocketUrl
+		default:
+			return nil, errors.ErrInvalidInput("output")
+		}
 
-		return nil, errors.ErrNotSupported("track requests")
+		//return nil, errors.ErrNotSupported("track requests")
 		// return params, nil
 	default:
 		return nil, errors.ErrInvalidInput("request")

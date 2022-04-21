@@ -9,6 +9,7 @@ RUN apt-get update && apt-get install -y golang
 # download go modules
 COPY go.mod .
 COPY go.sum .
+COPY deps/ deps/
 RUN go mod download
 
 # copy source

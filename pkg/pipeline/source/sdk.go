@@ -1,6 +1,7 @@
 package source
 
 import (
+	"io"
 	"time"
 
 	"github.com/pion/webrtc/v3"
@@ -34,9 +35,9 @@ type SDKSource struct {
 	active atomic.Int32
 
 	// track
-	trackID    string
-	fileWriter *fileWriter
-	wsWriter   *wsWriter
+	trackID     string
+	trackWriter *pionWriter
+	notifyChan  chan LiveKitEvent
 
 	// track composite
 	cs *clockSync
@@ -66,6 +67,7 @@ func NewSDKSource(p *params.Params) (*SDKSource, error) {
 		logger:       p.Logger,
 		endRecording: make(chan struct{}),
 		closed:       make(chan struct{}),
+		notifyChan:   make(chan LiveKitEvent, 1),
 	}
 
 	composite := false
@@ -114,8 +116,18 @@ func NewSDKSource(p *params.Params) (*SDKSource, error) {
 				s.videoWriter, err = newAppWriter(track, rp, s.logger, s.videoSrc, s.cs, s.videoPlaying)
 			}
 		} else {
-			s.fileWriter, err = newFileWriter(track, rp, s.logger)
-			s.wsWriter, err = newWsWriter(track, rp.WritePLI, "", s.logger)
+			// TODO: HTTP file transfer
+			var sink io.WriteCloser
+			if p.EgressWebSocketURL != "" {
+				sink, err = createWebsocketSink(p.EgressWebSocketURL, track.Codec().MimeType, s.logger, s.notifyChan)
+				if err != nil {
+					s.logger.Errorw("cannot create WS sink", err)
+				}
+			} else {
+				s.logger.Errorw("track request output must be WS stream or HTTP transfer", err)
+				return
+			}
+			s.trackWriter, err = newPionWriter(track, rp.WritePLI, sink, s.logger)
 		}
 
 		if err != nil {
@@ -181,7 +193,7 @@ func (s *SDKSource) join(p *params.Params) error {
 func (s *SDKSource) onTrackUnpublished(track *lksdk.RemoteTrackPublication, _ *lksdk.RemoteParticipant) {
 	switch track.SID() {
 	case s.trackID:
-		s.fileWriter.stop()
+		s.trackWriter.stop()
 	case s.audioTrackID:
 		s.audioWriter.stop()
 	case s.videoTrackID:
@@ -252,8 +264,8 @@ func (s *SDKSource) Close() {
 	default:
 		close(s.closed)
 
-		if s.fileWriter != nil {
-			s.fileWriter.stop()
+		if s.trackWriter != nil {
+			s.trackWriter.stop()
 		}
 
 		if s.cs != nil {
