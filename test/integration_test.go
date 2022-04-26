@@ -113,8 +113,11 @@ func TestEgress(t *testing.T) {
 	// 	testTrackComposite(t, conf, room)
 	// })
 
-	t.Run("Track", func(t *testing.T) {
-		testTrack(t, conf, room)
+	//t.Run("Track", func(t *testing.T) {
+	//	testTrack(t, conf, room)
+	//})
+	t.Run("TrackWS", func(t *testing.T) {
+		testTrackWs(t, conf, room)
 	})
 }
 
