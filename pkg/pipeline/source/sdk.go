@@ -38,6 +38,7 @@ type SDKSource struct {
 	trackID    string
 	fileWriter *fileWriter
 	filePath   string
+	wsWriter   *wsWriter
 
 	// track composite audio
 	audioTrackID string
@@ -112,7 +113,11 @@ func NewSDKSource(p *params.Params) (*SDKSource, error) {
 				s.videoWriter, err = newAppWriter(track, rp, s.logger, s.videoSrc, s.cs, s.videoPlaying)
 			}
 		} else {
-			s.fileWriter, err = newFileWriter(p, track, rp, s.logger, s.cs)
+			if p.OutWebsocketURL != "" {
+				s.wsWriter, err = newWsWriter(p, track, rp, s.logger, s.cs)
+			} else {
+				s.fileWriter, err = newFileWriter(p, track, rp, s.logger, s.cs)
+			}
 		}
 
 		if err != nil {
