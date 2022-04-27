@@ -9,6 +9,7 @@ import (
 	"github.com/lithammer/shortuuid/v3"
 	"github.com/stretchr/testify/require"
 	"net/http"
+	"net/http/httptest"
 	"os"
 	"strings"
 	"testing"
@@ -182,17 +183,17 @@ func testTrackWs(t *testing.T, conf *config.Config, room *lksdk.Room) {
 			codec:         "opus",
 			fileExtension: "ogg",
 		},
-		{
-
-			videoOnly:     true,
-			codec:         "vp8",
-			fileExtension: "ivf",
-		},
-		{
-			videoOnly:     true,
-			codec:         "h264",
-			fileExtension: "h264",
-		},
+		//{
+		//
+		//	videoOnly:     true,
+		//	codec:         "vp8",
+		//	fileExtension: "ivf",
+		//},
+		//{
+		//	videoOnly:     true,
+		//	codec:         "h264",
+		//	fileExtension: "h264",
+		//},
 	} {
 		test.filePrefix = fmt.Sprintf("track_ws-%s", test.codec)
 
@@ -204,25 +205,24 @@ func testTrackWs(t *testing.T, conf *config.Config, room *lksdk.Room) {
 	}
 }
 
-type testWebsocketServer struct {
-	port     string
-	conn     *websocket.Conn
-	file     *os.File
-	done     chan struct{}
-	upgrader websocket.Upgrader
-}
+var done = make(chan struct{})
 
-func (s *testWebsocketServer) handleWS(w http.ResponseWriter, r *http.Request) {
+func handleWebsocket(w http.ResponseWriter, r *http.Request) {
 	// Determine file type
 	ct := r.Header.Get("Content-Type")
+
 	var err error
+	var file *os.File
+	var conn *websocket.Conn
+	var upgrader = websocket.Upgrader{}
+
 	switch {
 	case strings.EqualFold(ct, "video/vp8"):
-		s.file, err = os.Create(shortuuid.New() + ".ivf")
+		file, err = os.Create(shortuuid.New() + ".ivf")
 	case strings.EqualFold(ct, "video/h264"):
-		s.file, err = os.Create(shortuuid.New() + ".h264")
+		file, err = os.Create(shortuuid.New() + ".h264")
 	case strings.EqualFold(ct, "audio/opus"):
-		s.file, err = os.Create(shortuuid.New() + ".ogg")
+		file, err = os.Create(shortuuid.New() + ".ogg")
 	default:
 		log.Fatal("Unsupported codec")
 		return
@@ -233,85 +233,52 @@ func (s *testWebsocketServer) handleWS(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Try accepting the WS connection
-	s.conn, err = s.upgrader.Upgrade(w, r, nil)
+	conn, err = upgrader.Upgrade(w, r, nil)
 	if err != nil {
 		log.Fatalf("Error in accepting WS connection: %s\n", err)
 		return
 	}
 
-	go s.writeToFile()
-}
+	go func() {
+		defer func() {
+			conn.Close()
+			file.Close()
+		}()
 
-func (s *testWebsocketServer) writeToFile() {
-	defer s.close()
-
-	for {
-		select {
-		case <-s.done:
-			return
-		default:
-			mt, msg, err := s.conn.ReadMessage()
-			if err != nil {
-				log.Fatalf("Error in reading message: %s\n", err)
+		for {
+			select {
+			case <-done:
 				return
-			}
-
-			switch mt {
-			case websocket.BinaryMessage:
-				if s.file == nil {
-					log.Fatal("File is not open")
+			default:
+				mt, msg, err := conn.ReadMessage()
+				if err != nil {
+					log.Fatalf("Error in reading message: %s\n", err)
 					return
 				}
-				_, err = s.file.Write(msg)
-				if err != nil {
-					log.Fatalf("Error while writing to file: %s\n", err)
-					return
+
+				switch mt {
+				case websocket.BinaryMessage:
+					if file == nil {
+						log.Fatal("File is not open")
+						return
+					}
+					_, err = file.Write(msg)
+					if err != nil {
+						log.Fatalf("Error while writing to file: %s\n", err)
+						return
+					}
 				}
 			}
 		}
-	}
-}
-
-func (s *testWebsocketServer) close() {
-	if s.conn != nil {
-		s.conn.Close()
-	}
-	if s.file != nil {
-		s.file.Close()
-	}
-}
-
-func (s *testWebsocketServer) Start() {
-	http.ListenAndServe(":"+s.port, nil)
-}
-
-func (s *testWebsocketServer) Stop() {
-	select {
-	case <-s.done:
-		return
-	default:
-		close(s.done)
-	}
-}
-
-func createWebsocketServer(port string) *testWebsocketServer {
-	srv := &testWebsocketServer{
-		port:     port,
-		done:     make(chan struct{}),
-		upgrader: websocket.Upgrader{},
-	}
-	http.HandleFunc("/ws", srv.handleWS)
-	return srv
+	}()
 }
 
 func runTrackWsTest(t *testing.T, conf *config.Config, room *lksdk.Room, test *testCase) {
-
-	var nodeIP, port string
-	fmt.Sscanf(conf.WsUrl, "ws://%s:%s", &nodeIP, &port)
-
-	// Start websocket server
-	srv := createWebsocketServer("9700")
-	go srv.Start()
+	s := httptest.NewServer(http.HandlerFunc(handleWebsocket))
+	defer func() {
+		close(done)
+		s.Close()
+	}
 
 	var trackID string
 	if test.audioOnly {
@@ -330,7 +297,7 @@ func runTrackWsTest(t *testing.T, conf *config.Config, room *lksdk.Room, test *t
 		RoomName: room.Name,
 		TrackId:  trackID,
 		Output: &livekit.TrackEgressRequest_WebsocketUrl{
-			WebsocketUrl: fmt.Sprintf("ws://%s:9700", nodeIP),
+			WebsocketUrl: "ws" + strings.TrimPrefix(s.URL, "http"),
 		},
 	}
 
@@ -342,9 +309,6 @@ func runTrackWsTest(t *testing.T, conf *config.Config, room *lksdk.Room, test *t
 			Track: trackRequest,
 		},
 	}
-
-	time.Sleep(time.Second * 15)
-	srv.Stop()
 
 	runFileTest(t, conf, test, req, filename)
 
