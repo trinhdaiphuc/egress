@@ -6,7 +6,6 @@ package test
 import (
 	"fmt"
 	"github.com/gorilla/websocket"
-	"github.com/lithammer/shortuuid/v3"
 	"github.com/stretchr/testify/require"
 	"net/http"
 	"net/http/httptest"
@@ -206,6 +205,7 @@ func testTrackWs(t *testing.T, conf *config.Config, room *lksdk.Room) {
 }
 
 var done = make(chan struct{})
+var wsFilepath = ""
 
 func handleWebsocket(w http.ResponseWriter, r *http.Request) {
 	// Determine file type
@@ -218,11 +218,11 @@ func handleWebsocket(w http.ResponseWriter, r *http.Request) {
 
 	switch {
 	case strings.EqualFold(ct, "video/vp8"):
-		file, err = os.Create(shortuuid.New() + ".ivf")
+		file, err = os.Create(wsFilepath)
 	case strings.EqualFold(ct, "video/h264"):
-		file, err = os.Create(shortuuid.New() + ".h264")
+		file, err = os.Create(wsFilepath)
 	case strings.EqualFold(ct, "audio/opus"):
-		file, err = os.Create(shortuuid.New() + ".ogg")
+		file, err = os.Create(wsFilepath)
 	default:
 		log.Fatal("Unsupported codec")
 		return
@@ -238,6 +238,8 @@ func handleWebsocket(w http.ResponseWriter, r *http.Request) {
 		log.Fatalf("Error in accepting WS connection: %s\n", err)
 		return
 	}
+
+	log.Println("Websocket connection received!")
 
 	go func() {
 		defer func() {
@@ -278,7 +280,7 @@ func runTrackWsTest(t *testing.T, conf *config.Config, room *lksdk.Room, test *t
 	defer func() {
 		close(done)
 		s.Close()
-	}
+	}()
 
 	var trackID string
 	if test.audioOnly {
@@ -292,6 +294,7 @@ func runTrackWsTest(t *testing.T, conf *config.Config, room *lksdk.Room, test *t
 	time.Sleep(time.Second * 5)
 
 	_, filename := getFileInfo(conf, test, "track_ws")
+	wsFilepath = filename
 
 	trackRequest := &livekit.TrackEgressRequest{
 		RoomName: room.Name,

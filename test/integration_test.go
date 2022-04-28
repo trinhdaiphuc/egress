@@ -109,9 +109,9 @@ func TestEgress(t *testing.T) {
 	// require.NoError(t, room.LocalParticipant.UnpublishTrack(p.audioTrackID))
 	// require.NoError(t, room.LocalParticipant.UnpublishTrack(p.videoTrackID))
 
-	// t.Run("TrackComposite", func(t *testing.T) {
-	// 	testTrackComposite(t, conf, room)
-	// })
+	//t.Run("TrackComposite", func(t *testing.T) {
+	//	testTrackComposite(t, conf, room)
+	//})
 
 	//t.Run("Track", func(t *testing.T) {
 	//	testTrack(t, conf, room)
