@@ -204,25 +204,34 @@ func testTrackWs(t *testing.T, conf *config.Config, room *lksdk.Room) {
 	}
 }
 
-var done = make(chan struct{})
-var wsFilepath = ""
+type testWebsocketServer struct {
+	path string
+	file *os.File
+	conn *websocket.Conn
+	done chan struct{}
+}
 
-func handleWebsocket(w http.ResponseWriter, r *http.Request) {
+func newTestWebsocketServer(filepath string) *testWebsocketServer {
+	return &testWebsocketServer{
+		path: filepath,
+		done: make(chan struct{}),
+	}
+}
+
+func (s *testWebsocketServer) handleWebsocket(w http.ResponseWriter, r *http.Request) {
 	// Determine file type
 	ct := r.Header.Get("Content-Type")
 
 	var err error
-	var file *os.File
-	var conn *websocket.Conn
 	var upgrader = websocket.Upgrader{}
 
 	switch {
 	case strings.EqualFold(ct, "video/vp8"):
-		file, err = os.Create(wsFilepath)
+		s.file, err = os.Create(s.path)
 	case strings.EqualFold(ct, "video/h264"):
-		file, err = os.Create(wsFilepath)
+		s.file, err = os.Create(s.path)
 	case strings.EqualFold(ct, "audio/opus"):
-		file, err = os.Create(wsFilepath)
+		s.file, err = os.Create(s.path)
 	default:
 		log.Fatal("Unsupported codec")
 		return
@@ -233,7 +242,7 @@ func handleWebsocket(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Try accepting the WS connection
-	conn, err = upgrader.Upgrade(w, r, nil)
+	s.conn, err = upgrader.Upgrade(w, r, nil)
 	if err != nil {
 		log.Fatalf("Error in accepting WS connection: %s\n", err)
 		return
@@ -243,16 +252,21 @@ func handleWebsocket(w http.ResponseWriter, r *http.Request) {
 
 	go func() {
 		defer func() {
-			conn.Close()
-			file.Close()
+			s.file.Close()
+
+			// Close the connection when we don't have unexpected EOF;
+			// we can't close a socket connection that's unexpectedly closed
+			if !websocket.IsUnexpectedCloseError(err) {
+				s.conn.Close()
+			}
 		}()
 
 		for {
 			select {
-			case <-done:
+			case <-s.done:
 				return
 			default:
-				mt, msg, err := conn.ReadMessage()
+				mt, msg, err := s.conn.ReadMessage()
 				if err != nil {
 					log.Fatalf("Error in reading message: %s\n", err)
 					return
@@ -260,11 +274,11 @@ func handleWebsocket(w http.ResponseWriter, r *http.Request) {
 
 				switch mt {
 				case websocket.BinaryMessage:
-					if file == nil {
+					if s.file == nil {
 						log.Fatal("File is not open")
 						return
 					}
-					_, err = file.Write(msg)
+					_, err = s.file.Write(msg)
 					if err != nil {
 						log.Fatalf("Error while writing to file: %s\n", err)
 						return
@@ -275,12 +289,11 @@ func handleWebsocket(w http.ResponseWriter, r *http.Request) {
 	}()
 }
 
+func (s *testWebsocketServer) close() {
+	close(s.done)
+}
+
 func runTrackWsTest(t *testing.T, conf *config.Config, room *lksdk.Room, test *testCase) {
-	s := httptest.NewServer(http.HandlerFunc(handleWebsocket))
-	defer func() {
-		close(done)
-		s.Close()
-	}()
 
 	var trackID string
 	if test.audioOnly {
@@ -294,7 +307,12 @@ func runTrackWsTest(t *testing.T, conf *config.Config, room *lksdk.Room, test *t
 	time.Sleep(time.Second * 5)
 
 	_, filename := getFileInfo(conf, test, "track_ws")
-	wsFilepath = filename
+	wss := newTestWebsocketServer(filename)
+	s := httptest.NewServer(http.HandlerFunc(wss.handleWebsocket))
+	defer func() {
+		wss.close()
+		s.Close()
+	}()
 
 	trackRequest := &livekit.TrackEgressRequest{
 		RoomName: room.Name,

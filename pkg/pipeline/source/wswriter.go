@@ -33,7 +33,8 @@ type wsWriter struct {
 	started bool
 	logger  logger.Logger
 	writer  media.Writer
-	closed  chan struct{}
+	done    chan struct{}
+	closed  bool
 }
 
 func newWsWriter(p *params.Params, track *webrtc.TrackRemote, rp *lksdk.RemoteParticipant, l logger.Logger, cs *clockSync) (*wsWriter, error) {
@@ -41,7 +42,8 @@ func newWsWriter(p *params.Params, track *webrtc.TrackRemote, rp *lksdk.RemotePa
 		track:  track,
 		cs:     cs,
 		logger: logger.Logger(logr.Logger(l).WithValues("trackID", track.ID())),
-		closed: make(chan struct{}),
+		done:   make(chan struct{}),
+		closed: false,
 	}
 	var err error
 
@@ -95,7 +97,7 @@ func (w *wsWriter) start() {
 
 	for {
 		select {
-		case <-w.closed:
+		case <-w.done:
 			// drain sample builder
 			_ = w.writePackets(true)
 			return
@@ -126,6 +128,10 @@ func (w *wsWriter) start() {
 }
 
 func (w *wsWriter) writePackets(force bool) error {
+	// If the connection is already closed, just return
+	if w.closed {
+		return nil
+	}
 	var pkts []*rtp.Packet
 	if force {
 		pkts = w.sb.ForcePopPackets()
@@ -145,10 +151,10 @@ func (w *wsWriter) writePackets(force bool) error {
 
 func (w *wsWriter) stop() {
 	select {
-	case <-w.closed:
+	case <-w.done:
 		return
 	default:
-		close(w.closed)
+		close(w.done)
 	}
 }
 
