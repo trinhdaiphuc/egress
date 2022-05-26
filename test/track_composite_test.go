@@ -19,7 +19,7 @@ func testTrackComposite(t *testing.T, conf *testConfig, room *lksdk.Room) {
 	if conf.RunFileTests {
 		testTrackCompositeFile(t, conf, room, params.MimeTypeOpus, params.MimeTypeVP8, &testCase{
 			name:     "tc-vp8-webm",
-			fileType: livekit.EncodedFileType_DEFAULT_FILETYPE,
+			fileType: livekit.EncodedFileType_WEBM,
 			filename: fmt.Sprintf("tc-vp8-%v.webm", time.Now().Unix()),
 		})
 

@@ -322,8 +322,12 @@ func (p *Params) applyAdvanced(advanced *livekit.EncodingOptions) {
 }
 
 func (p *Params) updateOutputType(fileType livekit.EncodedFileType) {
+
+	fmt.Println("updateOutputType filetype", fileType)
+
 	switch fileType {
 	case livekit.EncodedFileType_DEFAULT_FILETYPE:
+		fmt.Println("updateOutputType default typei videoEnabled ", p.VideoEnabled, "vcodec ", p.VideoCodec, "acodec ", p.AudioCodec)
 		if !p.VideoEnabled && p.AudioCodec != MimeTypeAAC {
 			p.OutputType = OutputTypeOGG
 		} else if p.VideoEnabled && p.VideoCodec == MimeTypeVP8 && p.AudioCodec == MimeTypeOpus {
@@ -335,7 +339,11 @@ func (p *Params) updateOutputType(fileType livekit.EncodedFileType) {
 		p.OutputType = OutputTypeMP4
 	case livekit.EncodedFileType_OGG:
 		p.OutputType = OutputTypeOGG
+	case livekit.EncodedFileType_WEBM:
+		p.OutputType = OutputTypeWebM
 	}
+
+	fmt.Println("updateOutputType otype ", p.OutputType)
 }
 
 func (p *Params) updateFileParams(conf *config.Config, filepath string, output interface{}) error {

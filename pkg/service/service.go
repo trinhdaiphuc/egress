@@ -148,6 +148,8 @@ func (s *Service) handleRequest(req *livekit.StartEgressRequest) {
 		return
 	}
 
+	logger.Errorw("handleRequest")
+
 	// check cpu load
 	var isRoomComposite bool
 	switch req.Request.(type) {
@@ -180,6 +182,7 @@ func (s *Service) handleRequest(req *livekit.StartEgressRequest) {
 
 	// build/verify params
 	pipelineParams, err := params.GetPipelineParams(s.conf, req)
+	logger.Errorw("GetPipelineParams", err, pipelineParams)
 	info := pipelineParams.Info
 	if err != nil {
 		info.Error = err.Error()
