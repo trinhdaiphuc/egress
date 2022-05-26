@@ -18,9 +18,9 @@ import (
 func testTrackComposite(t *testing.T, conf *testConfig, room *lksdk.Room) {
 	if conf.RunFileTests {
 		testTrackCompositeFile(t, conf, room, params.MimeTypeOpus, params.MimeTypeVP8, &testCase{
-			name:     "tc-vp8-mp4",
-			fileType: livekit.EncodedFileType_MP4,
-			filename: fmt.Sprintf("tc-vp8-%v.mp4", time.Now().Unix()),
+			name:     "tc-vp8-webm",
+			fileType: livekit.EncodedFileType_DEFAULT_FILETYPE,
+			filename: fmt.Sprintf("tc-vp8-%v.webm", time.Now().Unix()),
 		})
 
 		testTrackCompositeFile(t, conf, room, params.MimeTypeOpus, params.MimeTypeH264, &testCase{

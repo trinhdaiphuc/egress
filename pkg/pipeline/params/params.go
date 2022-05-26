@@ -326,6 +326,8 @@ func (p *Params) updateOutputType(fileType livekit.EncodedFileType) {
 	case livekit.EncodedFileType_DEFAULT_FILETYPE:
 		if !p.VideoEnabled && p.AudioCodec != MimeTypeAAC {
 			p.OutputType = OutputTypeOGG
+		} else if p.VideoEnabled && p.VideoCodec == MimeTypeVP8 && p.AudioCodec == MimeTypeOpus {
+			p.OutputType = OutputTypeWebM
 		} else {
 			p.OutputType = OutputTypeMP4
 		}
