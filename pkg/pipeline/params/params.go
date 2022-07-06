@@ -614,6 +614,7 @@ func (p *Params) updatePrefixAndPlaylist(identifier string) error {
 			}
 		}
 		p.PlaylistFilename = path.Join(p.TargetDirectory, p.PlaylistFilename)
+		fmt.Println("playlist filename 1", p.PlaylistFilename)
 	} else {
 		// Prepend the configuration base directory and the egress Id
 		// os.ModeDir creates a directory with mode 000 when mapping the directory outside the container
@@ -624,6 +625,7 @@ func (p *Params) updatePrefixAndPlaylist(identifier string) error {
 
 		p.PlaylistFilename = path.Join(outDir, p.PlaylistFilename)
 		p.LocalFilePrefix = path.Join(outDir, filePrefix)
+		fmt.Println("playlist filename 2", p.PlaylistFilename)
 	}
 	p.Logger.Debugw("writing to path", "prefix", p.LocalFilePrefix)
 

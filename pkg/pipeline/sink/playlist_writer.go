@@ -52,6 +52,7 @@ func (w *PlaylistWriter) StartSegment(filepath string, startTime int64) error {
 		return fmt.Errorf("invalid Start Timestamp")
 	}
 
+	fmt.Println("startSegment", filepath)
 	k := getFilenameFromFilePath(filepath)
 
 	w.openSegmentsLock.Lock()
@@ -74,6 +75,7 @@ func (w *PlaylistWriter) EndSegment(filepath string, endTime int64) error {
 		return fmt.Errorf("segment end time before start time")
 	}
 
+	fmt.Println("endSegment", filepath)
 	k := getFilenameFromFilePath(filepath)
 
 	w.openSegmentsLock.Lock()
@@ -113,6 +115,8 @@ func (w *PlaylistWriter) EOS() error {
 
 func (w *PlaylistWriter) writePlaylist() error {
 	buf := w.playlist.Encode()
+
+	fmt.Println("writePlaylist", w.playlistPath)
 
 	f, err := os.Create(w.playlistPath)
 	if err != nil {
