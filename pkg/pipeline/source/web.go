@@ -61,6 +61,7 @@ func NewWebSource(ctx context.Context, conf *config.Config, p *params.Params) (*
 			"%s?layout=%s&url=%s&token=%s",
 			p.TemplateBase, p.Layout, url.QueryEscape(p.LKUrl), p.Token,
 		)
+		fmt.Println("URL", p.LKUrl, inputUrl)
 	}
 
 	if err := s.createAudioSink(ctx, p.Info.EgressId); err != nil {
