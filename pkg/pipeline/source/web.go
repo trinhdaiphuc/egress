@@ -172,10 +172,14 @@ func (s *WebSource) launchChrome(ctx context.Context, url, egressID, display str
 	}
 
 	if insecure {
+		s.logger.Debugw("enabling insecure chrome mode")
+
 		opts = append(opts,
 			chromedp.Flag("disable-web-security", true),
 			chromedp.Flag("allow-running-insecure-content", true),
 		)
+	} else {
+		s.logger.Debugw("disabling insecure chrome mode")
 	}
 
 	allocCtx, _ := chromedp.NewExecAllocator(context.Background(), opts...)
