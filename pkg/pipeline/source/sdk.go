@@ -2,6 +2,7 @@ package source
 
 import (
 	"context"
+	"fmt"
 	"strings"
 	"sync"
 	"time"
@@ -217,7 +218,10 @@ func (s *SDKSource) join(ctx context.Context, p *params.Params) error {
 		}
 	}
 
+	fmt.Println("PARTICIPANTS", s.room.GetParticipants())
+
 	for _, p := range s.room.GetParticipants() {
+		fmt.Println("TRACKS", p.Tracks())
 		for _, track := range p.Tracks() {
 			if expecting[track.SID()] {
 				if rt, ok := track.(*lksdk.RemoteTrackPublication); ok {
