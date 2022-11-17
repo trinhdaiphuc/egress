@@ -105,6 +105,8 @@ func (s *Service) Run() error {
 		case msg := <-requests.Channel():
 			ctx, span := tracer.Start(context.Background(), "Service.HandleRequest")
 
+			fmt.Println("MSG", msg)
+
 			req := &livekit.StartEgressRequest{}
 			if err = proto.Unmarshal(requests.Payload(msg), req); err != nil {
 				logger.Errorw("malformed request", err)
