@@ -2,6 +2,7 @@ package sdk
 
 import (
 	"encoding/binary"
+	"fmt"
 	"io"
 	"net"
 	"time"
@@ -374,6 +375,10 @@ func (w *appWriter) push(packets []*rtp.Packet, blankFrame bool) error {
 		// record SN and TS
 		w.lastSN = pkt.SequenceNumber
 		w.lastTS = pkt.Timestamp
+
+		if (pkt.Payload[0] & 0x60) != 0 {
+			fmt.Printf("PKT %d %d len %d 0x%x 0x%x\n", pkt.SequenceNumber, pkt.Timestamp, len(pkt.Payload), pkt.Payload[0], pkt.Payload[1])
+		}
 
 		if !blankFrame {
 			// update sequence number
