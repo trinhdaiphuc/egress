@@ -376,10 +376,6 @@ func (w *appWriter) push(packets []*rtp.Packet, blankFrame bool) error {
 		w.lastSN = pkt.SequenceNumber
 		w.lastTS = pkt.Timestamp
 
-		if (pkt.Payload[0] & 0x60) != 0 {
-			fmt.Printf("PKT %d %d len %d 0x%x 0x%x\n", pkt.SequenceNumber, pkt.Timestamp, len(pkt.Payload), pkt.Payload[0], pkt.Payload[1])
-		}
-
 		if !blankFrame {
 			// update sequence number
 			pkt.SequenceNumber += w.snOffset
@@ -389,6 +385,10 @@ func (w *appWriter) push(packets []*rtp.Packet, blankFrame bool) error {
 		p, err := pkt.Marshal()
 		if err != nil {
 			return err
+		}
+
+		if (pkt.Payload[0] & 0x60) != 0 {
+			fmt.Printf("PKT %d %d len %d 0x%x 0x%x vs 0x%x 0x%x \n", pkt.SequenceNumber, pkt.Timestamp, len(pkt.Payload), pkt.Payload[0], pkt.Payload[1], p[pkt.Header.MarshalSize()], p[pkt.Header.MarshalSize()+1])
 		}
 
 		b := gst.NewBufferFromBytes(p)
